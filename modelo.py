@@ -75,7 +75,7 @@ class FinanzasModelo:
             # El ahorro se calcula como el 10% de los ingresos totales (ganancia total) del día
             ahorro = ingresos * 0.10
             
-            return ingresos, egreros, saldo, ahorro
+            return ingresos, egresos, saldo, ahorro
 
     def cerrar_dia_actual(self, fecha_dia: str) -> None:
         """Archiva el día actual calculando los totales y el ahorro, luego limpia el tablero."""
