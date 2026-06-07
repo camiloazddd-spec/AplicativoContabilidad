@@ -6,7 +6,7 @@ from typing import List, Tuple
 
 
 class FinanzasModelo:
-    """Maneja de forma exclusiva la base de datos y la exportación de archivos."""
+    """Maneja la base de datos con cierres diarios y cálculo de ahorro del 10%."""
 
     def __init__(self, db_name: str = "finanzas_hogar.db") -> None:
         self.db_name = db_name
@@ -18,6 +18,7 @@ class FinanzasModelo:
     def _crear_tablas(self) -> None:
         with self._conectar() as conn:
             cursor = conn.cursor()
+            # Movimientos del día en curso
             cursor.execute(
                 """
                 CREATE TABLE IF NOT EXISTS transacciones_actuales (
@@ -29,14 +30,16 @@ class FinanzasModelo:
                 )
             """
             )
+            # Historial cambiado a formato DIARIO con columna de ahorro
             cursor.execute(
                 """
-                CREATE TABLE IF NOT EXISTS historico_mensual (
+                CREATE TABLE IF NOT EXISTS historico_diario (
                     id INTEGER PRIMARY KEY AUTOINCREMENT,
-                    mes_año TEXT UNIQUE NOT NULL,
+                    fecha_dia TEXT UNIQUE NOT NULL,
                     total_ingresos REAL NOT NULL,
                     total_egresos REAL NOT NULL,
-                    saldo REAL NOT NULL
+                    saldo_neto REAL NOT NULL,
+                    ahorro_diez_porc REAL NOT NULL
                 )
             """
             )
@@ -58,7 +61,8 @@ class FinanzasModelo:
             cursor.execute("SELECT id, tipo, monto, descripcion, fecha FROM transacciones_actuales ORDER BY id DESC")
             return cursor.fetchall()
 
-    def calcular_totales_actuales(self) -> Tuple[float, float, float]:
+    def calcular_totales_actuales(self) -> Tuple[float, float, float, float]:
+        """Calcula ingresos, egresos, saldo y el 10% de ahorro sobre las ganancias (ingresos)."""
         with self._conectar() as conn:
             cursor = conn.cursor()
             cursor.execute("SELECT SUM(monto) FROM transacciones_actuales WHERE tipo = 'Ingreso'")
@@ -67,35 +71,44 @@ class FinanzasModelo:
             cursor.execute("SELECT SUM(monto) FROM transacciones_actuales WHERE tipo = 'Egreso'")
             egresos = cursor.fetchone()[0] or 0.0
 
-            return ingresos, egresos, (ingresos - egresos)
+            saldo = ingresos - egresos
+            # El ahorro se calcula como el 10% de los ingresos totales (ganancia total) del día
+            ahorro = ingresos * 0.10
+            
+            return ingresos, egreros, saldo, ahorro
 
-    def cerrar_mes_actual(self, mes_año: str) -> None:
-        ingresos, egresos, saldo = self.calcular_totales_actuales()
+    def cerrar_dia_actual(self, fecha_dia: str) -> None:
+        """Archiva el día actual calculando los totales y el ahorro, luego limpia el tablero."""
+        ingresos, egresos, saldo, ahorro = self.calcular_totales_actuales()
         with self._conectar() as conn:
             cursor = conn.cursor()
             cursor.execute(
-                "INSERT OR REPLACE INTO historico_mensual (mes_año, total_ingresos, total_egresos, saldo) VALUES (?, ?, ?, ?)",
-                (mes_año, ingresos, egresos, saldo),
+                """
+                INSERT OR REPLACE INTO historico_diario 
+                (fecha_dia, total_ingresos, total_egresos, saldo_neto, ahorro_diez_porc) 
+                VALUES (?, ?, ?, ?, ?)
+                """,
+                (fecha_dia, ingresos, egresos, saldo, ahorro),
             )
             cursor.execute("DELETE FROM transacciones_actuales")
             conn.commit()
 
-    def obtener_historico(self) -> List[Tuple[str, float, float, float]]:
+    def obtener_historico_diario(self) -> List[Tuple[str, float, float, float, float]]:
         with self._conectar() as conn:
             cursor = conn.cursor()
-            cursor.execute("SELECT mes_año, total_ingresos, total_egresos, saldo FROM historico_mensual ORDER BY mes_año DESC")
+            cursor.execute("SELECT fecha_dia, total_ingresos, total_egresos, saldo_neto, ahorro_diez_porc FROM historico_diario ORDER BY fecha_dia DESC")
             return cursor.fetchall()
 
-    def exportar_a_csv(self, nombre_archivo: str = "reporte_finanzas.csv") -> str:
+    def exportar_a_csv(self, nombre_archivo: str = "reporte_finanzas_diarias.csv") -> str:
         try:
             with open(nombre_archivo, mode="w", newline="", encoding="utf-8-sig") as f:
                 writer = csv.writer(f)
-                writer.writerow(["--- RESUMEN HISTÓRICO DE MESES ---"])
-                writer.writerow(["Mes/Año", "Total Ingresos", "Total Egresos", "Saldo Neto"])
-                for fila in self.obtener_historico():
+                writer.writerow(["--- RESUMEN HISTÓRICO POR DÍAS ---"])
+                writer.writerow(["Fecha Día", "Total Ingresos", "Total Egresos", "Saldo Neto", "Ahorro Reservado (10%)"])
+                for fila in self.obtener_historico_diario():
                     writer.writerow(fila)
                 writer.writerow([])
-                writer.writerow(["--- DETALLE DE MOVIMIENTOS DEL MES ACTUAL ---"])
+                writer.writerow(["--- DETALLE DE MOVIMIENTOS EN EL DÍA ACTIVO ---"])
                 writer.writerow(["ID", "Tipo", "Monto", "Descripción", "Fecha"])
                 for fila in self.obtener_transacciones_actuales():
                     writer.writerow(fila)

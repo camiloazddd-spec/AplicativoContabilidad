@@ -1,0 +1,7 @@
+﻿--- RESUMEN HISTÓRICO DE MESES ---
+Mes/Año,Total Ingresos,Total Egresos,Saldo Neto
+
+--- DETALLE DE MOVIMIENTOS DEL MES ACTUAL ---
+ID,Tipo,Monto,Descripción,Fecha
+2,Egreso,10000.0,Pago comida,2026-06-06
+1,Ingreso,10000.0,Trabajo,2026-06-06
